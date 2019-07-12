@@ -1,0 +1,16 @@
+name: ts-raster
+channels:
+  - conda-forge
+  - r
+dependencies:
+  - python=3.6    
+  - pandas=0.23.4
+  - jupyter
+  - jupyterlab 
+  - numpy
+  - gdal
+  - ipython-notebook
+  - r-irkernel
+ 
+
+
