@@ -16,3 +16,11 @@ The objectives of this tutorial are as follows:
 - Access and download night-time lights data & gridded population estimates
 - Visualize time series with plots
 - Download tabular data
+
+[Intro to spatial data analysis in R](http://rpubs.com/mmann1123/Belize_Spatial_training)
+
+The objectives of this tutorial are as follows:
+- Read and write raster data (raster)
+- Read shapefiles (sf)
+- Visualize data (ggplot2)
+- Fit models using geospatial data
