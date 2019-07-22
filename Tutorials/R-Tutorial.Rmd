@@ -3,14 +3,15 @@ title: "Spatial Data Analysis in R"
 output: html_document
 ---
 
+The following tutorial will walk us through the basics of spatial modeling in R. The primary objective is to see if we can create a model that finds the relationship between gridded population estimates and nighttime lights data that we downloaded from Google Earth Engine. As you will see most gridded population esitmates are heavily reliant on night lights to make their predictions. 
 
-First we need to set up R to have all the functionality that we need
+Objectives:
 
-We will install the following packages in order to: 
-
-- Read and write raster data (raster)
-- Read and write shapefiles (sf)
-- Visualize data (ggplot2)
+- Import and visualize raster data
+- Check rasters have same extent and resolution 
+- Import and visualize shp files
+- Create a random spatial sample and fit a model
+- Make a prediction back to raster layers
 
 ```{r setup, include=FALSE,eval = FALSE, include = FALSE}
 # only run this the first time 
@@ -23,9 +24,10 @@ install.packages('lwgeom')
 install.packages('caret')
 install.packages('gam')
 install.packages('tibble')
+install.package('dplyr')
 ```
 
-```{r libraries, warning=FALSE, include=FALSE}
+```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
 rm(list=ls())
 # import required libraries
 library(sf)
@@ -35,24 +37,14 @@ library(caret)
 library(gam)
 library(tibble)
 library(ModelMetrics)
+library(dplyr)
 ```
   
-# Spatial Data Analysis using R
-
-In this tutorial we are going to lear how to use the remote sensing data that we created in Google Earth Engine to train a model to make spatial predictions. 
-
-Objectives:
-
-- Import and visualize raster
-- Check rasters have same extent and resolution 
-- Import and visualize shp files
-- Create a random spatial sample and fit a model
-- Make a prediction back to raster layers
 
 ## Import and Visualize Raster Inputs
-In the following section we are going to use the `raster` function to import our images. We just need to tell the computer where to look. `../` backs us out of the current working directory (which is the `Tutorials` folder) and then looks in the `Example_Data` folder.  
+In the following section we are going to use the `raster` function to import our images. We just need to tell the computer where to look. `../` backs us out of the current working directory (which is the `Tutorials` folder) and then `../Example_data` looks in the `Example_Data` folder.  
 
-First we will import our population and nighttime lights DNB data. We will read it in, print out a description and then plot them. 
+First we will import our population and nighttime lights DNB data. We will read it in, print out a description and plot them. 
 
 ```{r Import and visualize raster Population}
 pop = raster('../Example_Data/Belize_median_POP_2010.tif')
@@ -68,7 +60,13 @@ print(dnb)
 plot(dnb)
 ```
 
-One important feature to note here is that the images have the same pixel resolution, same number of rows and columns and the same projection. They both have 637 rows and 366 columns of pixels, each pixel is 0.0044 degrees wide, and they are both projected in WGS 1984 Lat Lon.
+One important feature to note here is that both images have the same pixel resolution, same number of rows and columns and the same projection. 
+
+They both have:
+
+- 637 rows and 366 columns of pixels, 
+- each pixel is 0.0044 degrees wide, and 
+- projected in WGS 1984 Lat Lon.
  
 Since they have the same properties but hold different data it often helps to create a 'stack' out of them. We are essentially creating a two band raster with the first band being nighttime lights DNB and the second being the population data. 
 
@@ -90,12 +88,18 @@ ggplot()+geom_sf(data=blz)
 
 We are going to want to take a random sample of out population and nighttime lights data. In order to do this we need to create a set of random spatial points throughout the country. After that we will extract the pop and dnb data at those location and use them to create a model of the pop = fn(dnb).
 
-```{r Create a random spatial sample and fit a model}
-# create 5000 random points
+```{r Create a random spatial sample and fit a model, message=FALSE, warning=FALSE}
+# create 000 random points
+set.seed(1)
 random_points = st_sample(x = blz,size=1000 ,type = 'random')
 
 # visualize points
 ggplot()+geom_sf(data=random_points)
+```
+
+Now let's add the country boundary and overlay the points
+
+```{r point boundary}
 
 # visualize boundary and points  # alpha controls transparency 
 ggplot()+geom_sf(data=blz)+geom_sf(data=random_points,alpha=0.1)
@@ -105,6 +109,7 @@ ggplot()+geom_sf(data=blz)+geom_sf(data=random_points,alpha=0.1)
 In this step we extract the raster stack data to those random points. Unfortunately the function ```extract``` can't use a sf based point file, so we will need to create a copy of sp type, and then use that to do the extraction. 
 
 ```{r extract raster data to points}
+set.seed(3) 
 random_points_sp = as(random_points, "Spatial") # extract funciton needs sp spatial object not sf
 
 # Extract raster data to points 
@@ -117,7 +122,7 @@ pop_dnb_df = na.omit(pop_dnb_df)
 print(head(pop_dnb_df))
 ```
 
-We can now see that each point (point number is stored in ID) has two values Belize_median_DNB_2014_2018 and Belize_median_POP_2010.  We can now use this to create a statistical model to predict population as a function of nighttime lights.
+We can now see that each point (point number is stored in ID) now has two values Belize_median_DNB_2014_2018 and Belize_median_POP_2010.  We can now use this to create a statistical model to predict population as a function of nighttime lights.
 
 It is often helpful to look at a simple scatter plot of your Y and x values. In this case, it looks like we might have some kind of non-linear response. Let's find out. 
 
@@ -125,6 +130,7 @@ It is often helpful to look at a simple scatter plot of your Y and x values. In 
 ggplot()+geom_point(data=pop_dnb_df,aes(x=Belize_median_DNB_2014_2018,y=Belize_median_POP_2010))
 ```
 
+## Building a spatial model 
 In this tutorial we will be comparing the performance of a few models including:
 
 - Linear regression
@@ -165,11 +171,24 @@ summary(lm_fit)
 
 ```
 
+**Important: Keep in mind that these are POPULATION ESIMATES so don't read too much into it.**
 
 ### General Additive Models
 Since we suspect non-linear relationships between Y and x, we will fit a General Additive Model. GAMs are simply a class of statistical models in which the usual linear relationship between the response (Y) and predictors (x) are replaced by several non linear smooth functions to model and capture the non linearities in the data. These are also a flexible and smooth technique which helps us to fit Linear models which can be either linearly or non linearly dependent on several predictors Xi to capture non linear relationships.
 
 ![](R_gams.png)
+
+Effectively GAMS creates peicewise regression estimates with constraints that force line segments to connect. Here is an example of a fitting a smooth spline to a set of non-linear data. 
+
+```{r fig.width=4,fig.height=4}
+synth = data.frame(y=seq(0,100,5),x = seq(0,100,5)^2)
+
+ggplot(data= synth,aes(x=x,y=y)) + geom_point() +geom_smooth(method = 'loess')
+
+```
+
+Here we fit a GAMS model to help capture any non-linear relationships. 
+
 ```{r}
 
 formula_gam = Belize_median_POP_2010 ~ s(Belize_median_DNB_2014_2018)  #s() designates which variables to smooth
@@ -199,6 +218,7 @@ Next we will fit a very simple neural network. This method basically searches fo
 ```{r nnet CV, message=FALSE, warning=FALSE, include=FALSE}
 set.seed(825)
 
+# set parameters for cross validation 
 fitControl <- trainControl(## 5-fold CV
                            method = "repeatedcv",
                            number = 5,
@@ -206,12 +226,37 @@ fitControl <- trainControl(## 5-fold CV
                            repeats = 5)
 
 formula_ml = Belize_median_POP_2010 ~ Belize_median_DNB_2014_2018
+
+# fit the model 
 nnet_fit <- train(formula_ml, 
                  data = pop_dnb_train, 
                  trControl = fitControl,
-                 method = "nnet", 
+                 method = "nnet",
+                 preProc = c("center", "scale"), # subtract mean and divide by std dev
                  verbose = FALSE)
 ```
+
+```{}
+set.seed(825)
+
+# set parameters for cross validation 
+fitControl <- trainControl(## 5-fold CV
+                           method = "repeatedcv",
+                           number = 5,
+                           ## repeated 5 times
+                           repeats = 5)
+
+formula_ml = Belize_median_POP_2010 ~ Belize_median_DNB_2014_2018
+
+# fit the model 
+nnet_fit <- train(formula_ml, 
+                 data = pop_dnb_train, 
+                 trControl = fitControl,
+                 method = "nnet",
+                 preProc = c("center", "scale"), # subtract mean and divide by std dev
+                 verbose = FALSE)
+```
+
 
 ```{r print nnet}
 nnet_fit
@@ -270,3 +315,113 @@ plot(pred_lm_raster)
 
 ```
  
+ Finally let's write out our raster predictions to a file so that it can be opened in Arc or Qgis. 
+ 
+```{r write raster}
+ writeRaster(x = pred_lm_raster,
+            filename =  '../Example_Data/pred_lm_raster.tif',
+            overwrite=TRUE)
+
+```
+ 
+## Model improvements
+One potential way to imrpove our model is to add additional covariates. In this case we might think that there might be some interaction between how nighttime lights interacts with population in different parts of the country. 
+
+To control for this we will want to add a shp file of different administrative boundaries to our raster stack. 
+
+In order to do this we must follow these general steps:
+
+- Rasterize polygons into the same resolution / projection as our other data
+- Add the administrative raster to the stack
+- Extract all the data
+- Refit our improved model
+- Assess accuracy
+
+Let's take a look at the shapefile
+```{r rasterize}
+# read in data and plots
+admin = read_sf('../Example_Data/gadm36_BLZ_1.shp')
+ggplot()+geom_sf(data=admin)
+
+```
+
+Now we need to rasterize the data by telling R which column of values to use, and give it an example of what the final raster should look like (resolution, extent etc)
+
+```{r}
+# create an sp version for rasterizing
+admin_sp = as(admin,'Spatial')  
+
+## create a numeric value for each admin level 
+# Copy admin names to new column 
+admin_sp$NAME_1_numeric = admin_sp$NAME_1 
+
+# look at the number of unique values
+table(admin_sp$NAME_1_numeric)
+
+# recode values to numeric
+admin_sp$NAME_1_numeric = admin_sp$NAME_1_numeric %>% 
+                          recode(Belize = 1, Cayo = 2, Corozal = 3, `Orange Walk` = 4, `Stann Creek` = 5, Toledo = 6)
+
+head(admin_sp[,c("NAME_1", "NAME_1_numeric")])
+```
+
+```{r}
+admin_raster = rasterize(
+                          x=admin_sp,                   # shape to rasterize 
+                          y= dnb,                       # example raster to copy properties from 
+                          field = 'NAME_1_numeric'      # numeric field to rasterize 
+                          )
+
+# name the layer that was rasterized
+names(admin_raster) = 'Admin'        
+
+plot(admin_raster)
+
+```
+
+Now we need to add these values to the stack and extract data to points. 
+
+```{r}
+# create the new raster stack 
+dnb_pop_adm_stack = stack(dnb,pop,admin_raster)
+
+# extract values to points 
+pop_dnb_adm_df = extract(dnb_pop_adm_stack, random_points_sp, df=TRUE) ## df=TRUE i.e. return as a data.frame
+
+# remove nas
+pop_dnb_adm_df = na.omit(pop_dnb_adm_df)
+
+head(pop_dnb_adm_df)
+```
+
+Let's create a OLS model with slope dummies (by interacting administrative boundaries with dnb values).  We are going to declare Admin to be a "factor" this effectively treats the variable as a fixed effects component and creates the appropriate dummy variables. We can also handle interations easily by simply using ```*``` to indicate which variables should be interacted. R automatically includes the appropriate interactions in the model. 
+
+```{r OLS interactions}
+# define the specification and include interaction terms
+formula_lm_admin = Belize_median_POP_2010 ~ Belize_median_DNB_2014_2018*factor(Admin)
+
+# break observations into testing and training splits
+pop_dnb_adm_train = pop_dnb_adm_df[ trainIndex,]  # keep training rows
+pop_dnb_adm__test  = pop_dnb_adm_df[-trainIndex,]  # omit training rows (keep testing)
+
+
+# fit the model
+lm_fit_admin = lm(formula_lm_admin, data = pop_dnb_adm_train)
+
+summary(lm_fit_admin)
+```
+
+```{r final accuracy}
+pred_lm_admin = predict(lm_fit_admin, newdata=pop_dnb_adm__test)
+
+# calculate RMSE 
+rmse_lm_admin = rmse(Y,pred_lm_admin)
+
+tribble(
+  ~Model, ~RMSE,
+  "ols", rmse_lm,  
+  "ols admin",rmse_lm_admin,
+  "gams", rmse_gam,
+  "nnet",rmse_nnet
+)
+```
