@@ -290,17 +290,8 @@ tribble(
 )
 ```
 
-Sometimes simplest is best! Looks like a simple linear regression has the lowest RMSE out-of-sample. This indicates that the relationship between population and nighttime lights is quite simple! 
-
-Let's calculate the percentage of variance explained by the OLS model in the out-of-sample data.
-
-```{r variance exaplained}
-rss = sum(rmse_lm)  ## residual sum of squares
-tss = sum((Y - mean(Y)) ^ 2)  ## total sum of squares
-rsq = 1 - rss/tss
-rsq
-```
-Now let's use our 'best' model to make predictions of population back to the raster stack. 
+In this case it looks like the simple neural net out performs all the other models. This is likely due to our improved handling of model fit through cross-validation. 
+ 
 
 ## Making Spatial Predictions
 
@@ -345,6 +336,8 @@ ggplot()+geom_sf(data=admin)
 
 ```
 
+### Rasterize a shapefile
+
 Now we need to rasterize the data by telling R which column of values to use, and give it an example of what the final raster should look like (resolution, extent etc)
 
 ```{r}
@@ -360,7 +353,8 @@ table(admin_sp$NAME_1_numeric)
 
 # recode values to numeric
 admin_sp$NAME_1_numeric = admin_sp$NAME_1_numeric %>% 
-                          recode(Belize = 1, Cayo = 2, Corozal = 3, `Orange Walk` = 4, `Stann Creek` = 5, Toledo = 6)
+                          recode(Belize = 1, Cayo = 2, Corozal = 3, `Orange Walk` = 4, 
+                                 `Stann Creek` = 5, Toledo = 6)
 
 head(admin_sp[,c("NAME_1", "NAME_1_numeric")])
 ```
@@ -378,6 +372,8 @@ names(admin_raster) = 'Admin'
 plot(admin_raster)
 
 ```
+
+### Add rasterized data to the stack
 
 Now we need to add these values to the stack and extract data to points. 
 
@@ -425,3 +421,7 @@ tribble(
   "nnet",rmse_nnet
 )
 ```
+
+It looks like adding the administrative interatctions does improve the model fit, but not enough to surpass the results from a basic neural net. 
+
+
