@@ -24,7 +24,7 @@ install.packages('lwgeom')
 install.packages('caret')
 install.packages('gam')
 install.packages('tibble')
-install.package('dplyr')
+install.packages('dplyr')
 ```
 
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
@@ -113,7 +113,7 @@ set.seed(3)
 random_points_sp = as(random_points, "Spatial") # extract funciton needs sp spatial object not sf
 
 # Extract raster data to points 
-pop_dnb_df = extract(dnb_pop_stack, random_points_sp, df=TRUE) ## df=TRUE i.e. return as a data.frame
+pop_dnb_df = extract(x=dnb_pop_stack, y=random_points_sp, df=TRUE) ## df=TRUE i.e. return as a data.frame
 
 # drop any rows where no satellite values were available (missing values are stored as NA)
 pop_dnb_df = na.omit(pop_dnb_df)
@@ -148,7 +148,7 @@ trainIndex = createDataPartition(y = pop_dnb_df$Belize_median_DNB_2014_2018,  # 
                                   list = FALSE, 
                                   times = 1)
 
-pop_dnb_train = pop_dnb_df[ trainIndex,]  # keep training rows
+pop_dnb_train = pop_dnb_df[ trainIndex, ]  # keep training rows
 pop_dnb_test  = pop_dnb_df[-trainIndex,]  # omit training rows (keep testing)
 
 # show top example and shape of testing and training
@@ -215,7 +215,7 @@ Next we will fit a very simple neural network. This method basically searches fo
 
 ![](R_nnet.png)
 
-```{r nnet CV, message=FALSE, warning=FALSE, include=FALSE}
+```{r nnet CV, message=FALSE, warning=FALSE, include=T}
 set.seed(825)
 
 # set parameters for cross validation 
